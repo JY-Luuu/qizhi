@@ -1,0 +1,80 @@
+name: Build and verify 栖纸 Qizhi
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Swift 6 toolchain
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+
+      - name: Verify Swift core
+        run: bash scripts/swift.sh run HangLaterChecks
+
+      - name: Verify native host
+        run: python3 -m unittest discover -s NativeHost -p 'test_*.py'
+
+      - name: Verify personal identities
+        run: python3 scripts/verify-personal-identity.py
+
+      - name: Verify Chrome extension
+        run: |
+          node --check ChromeExtension/popup.js
+          node --check ChromeExtension/background.js
+
+      - name: Build release artifacts
+        run: |
+          bash scripts/build-app.sh release
+          plutil -lint build/Qizhi.app/Contents/Info.plist
+          codesign --verify --deep --strict build/Qizhi.app
+          ./build/Qizhi.app/Contents/MacOS/HangLater --verify-adaptive-card-layout
+          ./build/Qizhi.app/Contents/MacOS/HangLater --verify-resume-targets
+          bash scripts/make-dmg.sh
+
+      - name: Save installable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qizhi-${{ runner.arch }}
+          path: build/releases/Qizhi.*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Qizhi-*
+          path: build/releases
+          merge-multiple: true
+      - name: Publish personal release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              build/releases/Qizhi.dmg build/releases/Qizhi.zip --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              build/releases/Qizhi.dmg build/releases/Qizhi.zip \
+              --verify-tag --title "栖纸 Qizhi ${GITHUB_REF_NAME#v}" --generate-notes
+          fi

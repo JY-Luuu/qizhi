@@ -1,0 +1,13 @@
+{
+  "name": "栖纸 Qizhi",
+  "owner": "JY-Luuu",
+  "repository": "JY-Luuu/qizhi",
+  "version": "0.1.0",
+  "bundle_identifier": "io.github.jy-luuu.qizhi",
+  "data_directory": "Qizhi",
+  "native_host_name": "io.github.jy_luuu.qizhi.capture",
+  "extension_id": "piedofabnbbeblcfgadkfnddmodigjdn",
+  "upstream_repository": "https://github.com/yuxuanfuture/hang-later",
+  "upstream_commit": "dc1b93abc9a6ab6ff845cfa33df309e43694a9cd",
+  "upstream_version": "0.10.0"
+}
