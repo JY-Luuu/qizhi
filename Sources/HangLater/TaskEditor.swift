@@ -108,6 +108,9 @@ struct TaskEditor: View {
             field(store.text("这件事叫什么", "What is it called?")) {
                 TextField(store.text("例如：继续学习那个视频", "For example: continue that course"), text: $title).focused($titleFocused)
             }
+            if let origin = latestTask?.actionOrigin {
+                ActionEvidenceSection(origin: origin, language: store.language)
+            }
             if task?.filePath == nil, task?.appBundleIdentifier == nil, task?.isImage != true {
                 field(store.text("网页链接（可选）", "Web link (optional)")) {
                     TextField("https://…", text: $url)

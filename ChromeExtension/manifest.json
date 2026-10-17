@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "栖纸 Qizhi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "把当前网页的标题、链接和画面晾起来；视频自动裁出播放器。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtaFtouOEivbOJe8q+UqGUtl+CzP6LPJ5VxZsPtenmFsSpJkkkXUteSb0yPXBZlpQOCf4RIFyON1/zwX683oQKFM6XkKjH/fy8w95dSskibP+hTBZ7oiL6WRON2J525uj/R0dzji9yBP+RBQUVe46nCgMdn9YL8urHbw7Y3X/zlihIejnU0AIdhUthtBt9MbZPsy9Uz1wGgvii0jmdNiq33XNb+7pFJw27Jjy8aZSz+nHhN/PsejfEiLRNphN1y5OGzXNeEWZfxdza4fc8BwX+qcDKBOu+VnHLI2M6Qj+cgpLvTkunzvUMgUDmf7Vz9pTszNIBQuDMbetNqUMnob2cwIDAQAB",
   "permissions": [

@@ -373,6 +373,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUs
         return true
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationWillTerminate(_ notification: Notification) {
+        store?.study.flushDrafts()
+        store?.study.cancel()
+    }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                              willPresent notification: UNNotification,

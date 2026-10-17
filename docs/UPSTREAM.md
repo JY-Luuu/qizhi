@@ -17,7 +17,11 @@ The first personal version intentionally preserves the original screens and beha
 
 Internal Swift target names remain compatible with the upstream implementation. The main wordmark, receipt and icon use QIZHI, and the system-visible application name is 栖纸 Qizhi. Personal data is isolated rather than automatically importing or changing the upstream application's files.
 
-## Identity
+## Version 0.2 additions
+
+Qizhi adds Action Studio: a selected-source learning workflow with a bounded model/tool executor, webpage/text/PDF snapshots, quotation validation, editable draft cards, explicit confirmation, atomic idempotent task creation, run checkpoints, cancellation/retry and endpoint-specific Keychain credentials. These additions use the upstream app's task system and visual foundations. The offline example and new deterministic/HTTP/native integration checks are separately identified; they are not live model or user-study results. See ACTION_STUDIO.md and ACTION_VALIDATION.md.
+
+## Identity configuration
 
 The machine-readable personal identity is in project.json. The application uses Sources/HangLaterCore/AppIdentity.swift. The Chrome manifest's public key fixes the extension ID, and the integration checks ensure the extension, Python host and Swift bridge agree.
 

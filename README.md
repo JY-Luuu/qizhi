@@ -1,10 +1,33 @@
 # 栖纸 Qizhi
 
-**JY-Luuu 的 macOS 个人衍生版。基于 [Yuxuan Fu 的 Hang Later](https://github.com/yuxuanfuture/hang-later)，保留原作的界面、纸片交互和功能。**
+**把收藏的资料，变成有依据、可确认的下一步。** JY-Luuu 的 macOS 个人衍生版，基于 [Yuxuan Fu 的 Hang Later](https://github.com/yuxuanfuture/hang-later) 的原生纸片界面，新增资料驱动的行动工坊。
 
-原作基线：v0.10.0 / [`dc1b93a`](https://github.com/yuxuanfuture/hang-later/commit/dc1b93abc9a6ab6ff845cfa33df309e43694a9cd)。个人版版本：0.1.0。
+原作基线：v0.10.0 / [`dc1b93a`](https://github.com/yuxuanfuture/hang-later/commit/dc1b93abc9a6ab6ff845cfa33df309e43694a9cd)。个人版版本：0.2.0。
+
+![行动工坊：离线样例草稿，非真实模型输出](docs/images/qizhi-studio-review-zh.png)
+
+## 行动工坊
+
+1. 晾起网页、PDF、Markdown 或文字资料，打开“行动工坊”，选择 1–3 份。
+2. 写下目标和 5–120 分钟预算。在“模型连接”中填写兼容接口的完整地址、支持工具调用的模型 ID 和 API Key。
+3. 勾选允许把选定正文和目标发给模型，再生成草稿。模型仅能读取选定资料、提交 1–6 张草稿，不能直接修改任务。
+4. 点击引用查看原文快照；修改标题、步骤、产出、顺序和时长。点击“确认并挂上”，通过校验后才会一次性创建任务。
+5. 取消或失败不会创建任务。重试复用已读取的快照，应用重启后中断的执行可继续。任务保留引用与 PDF 页码，重复确认不会重复创建。
+
+**没有 API Key 也可以“试用离线样例”。** 它使用内置资料和固定结果，不调用模型，不代表真实模型效果，也不会在真实调用失败时自动代替模型。真实功能需要独立 API 额度，聊天订阅不能直接使用。
+
+Key 按接口地址分别存入 macOS 钥匙串。接口需兼容 Chat Completions 的 `tools` / `tool_calls`、`tool_choice: required`、`parallel_tool_calls: false` 和 `max_completion_tokens`；公网接口只允许 HTTPS。不兼容的服务会明确失败。[官方工具调用说明](https://developers.openai.com/api/docs/guides/function-calling)。
+
+读取上限为每份 10 MB，PDF 前 20 页，每份最多 24 段、16,000 字符。网页不执行 JavaScript、不登录，扫描 PDF 尚需先做 OCR。截取长资料会显示提示。引文校验只证明文本存在于快照中，理解和建议仍需人工判断。
+
+产品与技术取舍见 [ACTION_STUDIO.md](docs/ACTION_STUDIO.md)，验证范围见 [ACTION_VALIDATION.md](docs/ACTION_VALIDATION.md)。
+
+<details>
+<summary>原生晾衣绳</summary>
 
 ![栖纸 Qizhi main window](docs/images/qizhi-main-light-zh.png)
+
+</details>
 
 <details>
 <summary>深色模式 / Dark mode</summary>
@@ -18,6 +41,7 @@
 ## 这个版本做了什么
 
 - 保留原作的暖纸纹理、字体、绳子、夹子、卡片动画、深浅模式和中英文界面。
+- 新增行动工坊：受限工具调用、原文引用校验、草稿编辑、检查点恢复，以及防重复批量写入。
 - 使用自己的应用标识、存储目录、Chrome 扩展 ID 和 Native Messaging 主机，可与原版分开保存内容。
 - 应用程序名和下载附件为 `Qizhi`，系统显示名称为 **栖纸 Qizhi**。
 - 增加个人版身份一致性及浏览器消息端到端检查。
@@ -71,7 +95,7 @@ HANG_LATER_DISABLE_SWIFTPM_SANDBOX=1 bash scripts/build-app.sh debug
 ~/Library/Application Support/Qizhi/
 ```
 
-不会自动迁移、清空或覆盖原版的 `HangLater/` 数据。任务、截图和预览保存在本机，没有账号、云同步、统计或遥测。
+不会自动迁移、清空或覆盖原版的 `HangLater/` 数据。任务、截图、资料快照和执行记录保存在本机，没有账号、云同步、统计或遥测。**行动工坊会在你勾选并开始后，把选中的资料正文、标题和目标发送给配置的模型服务商，其 API 计费和数据规则由该服务商决定。** Key 不会写入任务、日志或 GitHub，其他未选中的任务和文件不会交给模型。
 
 添加链接时系统 LinkPresentation 可能请求该网页以取得预览；Chrome 扩展只在主动操作时捕捉内容。原生窗口恢复逻辑在用户触发 Chrome 窗口捕捉或恢复时，可能按精确标题查询本地 Chrome 历史副本，或通过 AppleScript 查找标签页。
 
@@ -92,13 +116,15 @@ HANG_LATER_DISABLE_SWIFTPM_SANDBOX=1 bash scripts/build-app.sh debug
 
 ```sh
 bash scripts/swift.sh run HangLaterChecks
+bash scripts/swift.sh run QizhiAgentChecks --report /tmp/qizhi-agent-fixtures.json
+python3 scripts/verify-agent-http.py
 python3 -m unittest discover -s NativeHost -p 'test_*.py' -v
 python3 scripts/verify-personal-identity.py
 node --check ChromeExtension/popup.js
 node --check ChromeExtension/background.js
 ```
 
-更多检查和安全样例截图入口见 [VERIFICATION.md](docs/VERIFICATION.md)，首版实际验证记录见 [BUILD_VALIDATION.md](docs/BUILD_VALIDATION.md)。
+更多检查和安全样例截图入口见 [VERIFICATION.md](docs/VERIFICATION.md)，首版记录见 [BUILD_VALIDATION.md](docs/BUILD_VALIDATION.md)。行动工坊回归检查使用固定替身和本地 HTTP 服务，尚未进行真实用户试用或在线模型质量评测。
 
 ## 许可与致谢
 
@@ -109,3 +135,5 @@ MIT。原始项目 Copyright © 2026 Yuxuan Fu；个人版修改 Copyright © 20
 ## English
 
 栖纸 Qizhi is JY-Luuu's personal derivative of [Hang Later by Yuxuan Fu](https://github.com/yuxuanfuture/hang-later), based on upstream v0.10.0. It preserves the original native macOS interface and workflow while using independent app, storage and Chrome messaging identities. Original authorship and MIT notices are retained. See [UPSTREAM.md](docs/UPSTREAM.md) for provenance and changes.
+
+Version 0.2 adds Action Studio: selected documents → bounded tool calls → evidence-backed drafts → human confirmation → atomic, idempotent task creation. Bring a compatible model endpoint and API key, or try the explicitly labeled deterministic offline sample. Fixture checks are not live-model quality measurements.

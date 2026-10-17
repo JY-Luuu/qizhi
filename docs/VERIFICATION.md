@@ -5,6 +5,8 @@ Run `python3 scripts/verify-personal-identity.py` in addition to the upstream ch
 
 Run all checks from the repository root.
 
+For Qizhi 0.2 Action Studio, also run the checks in [ACTION_VALIDATION.md](ACTION_VALIDATION.md). The deterministic examples and HTTP fixtures do not measure real model quality. The demo walkthrough is in [DEMO.md](DEMO.md).
+
 ## Core behavior
 
 ```sh

@@ -27,6 +27,8 @@ public struct HangingTask: Codable, Identifiable, Equatable, Sendable {
     public var kind: HangingTaskKind?
     /// Optional user-defined type. The type's name and border color live in task-types.json.
     public var taskTypeID: UUID?
+    /// Evidence snapshots retained after an explicitly confirmed action plan.
+    public var actionOrigin: ActionTaskOrigin?
     /// Horizontal position on the clothesline, expressed as a 0...1 fraction.
     public var lineX: Double?
     /// Increasing layer number lets overlapping cards keep the last-moved card on top.
@@ -272,6 +274,39 @@ public final class TaskRepository {
         task.lineX = min(max(lineX, 0), 1)
         task.lineLayer = (tasks.compactMap(\.lineLayer).max() ?? 0) + 1
         try update(task)
+    }
+
+    /// Validate the entire batch before the single atomic write. Stable draft IDs
+    /// make replay after a journal-write failure safe, including completed tasks.
+    @discardableResult
+    public func applyActionPlan(_ run: StudyRun, cards: [ActionDraft]) throws -> Int {
+        guard run.status == .review || run.status == .completed else {
+            throw ActionPlanError("只有确认中的草稿可以保存。 / Only reviewed drafts may be saved.")
+        }
+        try ActionValidation.validate(cards, documents: run.documents, budget: run.budget, requireAllSources: false)
+        var additions: [HangingTask] = []
+        for card in cards {
+            if let existing = tasks.first(where: { $0.id == card.id }) {
+                guard existing.actionOrigin?.runID == run.id,
+                      existing.actionOrigin?.cardID == card.id else {
+                    throw ActionPlanError("行动卡标识冲突，未保存。 / Card identity conflict.")
+                }
+                continue
+            }
+            let citations = card.citations.map { citation -> SavedCitation in
+                let doc = run.documents.first { $0.source.id == citation.sourceID }!
+                let passage = doc.passages.first { $0.id == citation.passageID }!
+                return SavedCitation(source: doc.source, passage: passage, quote: citation.quote, fingerprint: doc.fingerprint)
+            }
+            var task = HangingTask(id: card.id, title: card.title,
+                                   note: card.instruction + "\n\n→ " + card.outcome,
+                                   tint: (tasks.count + additions.count) % 4, kind: .idea)
+            task.actionOrigin = ActionTaskOrigin(runID: run.id, cardID: card.id, minutes: card.minutes,
+                                                outcome: card.outcome, citations: citations, isDemo: run.isDemo)
+            additions.append(task)
+        }
+        if !additions.isEmpty { try commit(additions + tasks) }
+        return additions.count
     }
 
     private func commit(_ next: [HangingTask]) throws {

@@ -28,6 +28,12 @@ jobs:
       - name: Verify native host
         run: python3 -m unittest discover -s NativeHost -p 'test_*.py'
 
+      - name: Verify action agent and provider contract
+        run: |
+          mkdir -p build
+          bash scripts/swift.sh run QizhiAgentChecks --report build/agent-fixture-report.json
+          python3 scripts/verify-agent-http.py
+
       - name: Verify personal identities
         run: python3 scripts/verify-personal-identity.py
 
@@ -43,7 +49,15 @@ jobs:
           codesign --verify --deep --strict build/Qizhi.app
           ./build/Qizhi.app/Contents/MacOS/HangLater --verify-adaptive-card-layout
           ./build/Qizhi.app/Contents/MacOS/HangLater --verify-resume-targets
+          ./.build/release/HangLater --verify-action-studio
           bash scripts/make-dmg.sh
+
+      - name: Save deterministic validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qizhi-Agent-Validation
+          path: build/agent-fixture-report.json
+          if-no-files-found: error
 
       - name: Save installable build
         uses: actions/upload-artifact@v4

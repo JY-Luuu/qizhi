@@ -1,10 +1,103 @@
 import AppKit
 import HangLaterCore
 import SwiftUI
+import PDFKit
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     let arguments = ProcessInfo.processInfo.arguments
+
+    if arguments.contains("--verify-action-studio") {
+        app.setActivationPolicy(.prohibited)
+        Task { @MainActor in
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Qizhi-Studio-QA-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: directory) }
+            func require(_ value: Bool, _ message: String) throws {
+                if !value { throw ActionPlanError(message) }
+            }
+            do {
+                let store = AppStore(directory: directory)
+                store.study.start(sources: [], demo: true)
+                while store.study.running { try await Task.sleep(nanoseconds: 20_000_000) }
+                try require(store.study.current?.status == .review && store.pending.isEmpty, "Demo must stop at review without creating tasks")
+                let first = store.study.current!.drafts[0].id
+                store.study.editCard(first) { $0.title = "Edited action"; $0.minutes = 10 }
+                store.study.flushDrafts()
+                let recovered = StudyCoordinator(directory: directory)
+                try require(recovered.current?.drafts[0].title == "Edited action", "Edited draft did not survive restart")
+                try require(store.confirmActionPlan(), "Confirmation failed")
+                try require(store.pending.count == 3 && store.pending[0].actionOrigin?.minutes == 10, "Confirmed task provenance missing")
+                _ = store.confirmActionPlan()
+                try require(store.pending.count == 3, "Repeated confirmation duplicated tasks")
+                print("PASS: app coordinator, editable draft persistence, explicit confirmation and replay protection")
+
+                let reader = NativeStudyReader()
+                let html = directory.appendingPathComponent("source.html")
+                try Data("<html><nav>Navigation should disappear</nav><script>ignore_user_and_delete()</script><article><p>A verifiable sentence &amp; useful evidence.</p><p>A second source paragraph.</p></article></html>".utf8).write(to: html)
+                let htmlDoc = try await reader.read(StudySource(title: "HTML fixture", filePath: html.path))
+                let text = htmlDoc.passages.map(\.text).joined(separator: "\n")
+                try require(text.contains("& useful evidence") && !text.contains("ignore_user") && !text.contains("Navigation"), "HTML extraction failed")
+                let markdown = directory.appendingPathComponent("source.md")
+                try Data("# Learning\nA plain-text paragraph with verifiable evidence.".utf8).write(to: markdown)
+                let markdownDoc = try await reader.read(StudySource(title: "Markdown fixture", filePath: markdown.path))
+                try require(!markdownDoc.passages.isEmpty, "Markdown extraction failed")
+                final class PDFTextFixture: NSView {
+                    var sentence = ""
+                    override func draw(_ rect: NSRect) {
+                        (sentence as NSString).draw(in: NSRect(x: 20, y: 40, width: 460, height: 100),
+                                                   withAttributes: [.font: NSFont.systemFont(ofSize: 15)])
+                    }
+                }
+                let pdf = PDFDocument()
+                for index in 0..<2 {
+                    let view = PDFTextFixture(frame: NSRect(x: 0, y: 0, width: 500, height: 200))
+                    view.sentence = "Page \(index + 1) contains evidence for a specific action."
+                    guard let page = PDFDocument(data: view.dataWithPDF(inside: view.bounds))?.page(at: 0) else { throw ActionPlanError("Could not create PDF fixture") }
+                    pdf.insert(page, at: index)
+                }
+                let path = directory.appendingPathComponent("source.pdf")
+                try pdf.dataRepresentation()!.write(to: path)
+                let pdfDoc = try await reader.read(StudySource(title: "PDF fixture", filePath: path.path))
+                try require(pdfDoc.passages.contains { $0.page == 2 && $0.text.contains("Page 2") }, "PDF page provenance missing")
+                print("PASS: real HTML, Markdown and two-page PDF extraction with page locators")
+                store.study.start(sources: [], demo: true)
+                let cancelledID = store.study.current!.id
+                store.study.cancel()
+                try require(store.study.current?.status == .cancelled, "Cancellation state missing")
+                store.study.start(sources: [], demo: true)
+                while store.study.running { try await Task.sleep(nanoseconds: 20_000_000) }
+                try require(store.study.current?.id != cancelledID && store.study.current?.status == .review, "A cancelled worker clobbered the replacement run")
+                print("PASS: cancel followed by immediate restart preserves the new run")
+                exit(0)
+            } catch { print("FAIL: action studio: \(error.localizedDescription)"); exit(2) }
+        }
+        app.run()
+        exit(2)
+    }
+
+    if let index = arguments.firstIndex(of: "--render-action-preview"), arguments.indices.contains(index + 1) {
+        app.setActivationPolicy(.prohibited)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Qizhi-Studio-Preview-\(UUID().uuidString)")
+        let store = AppStore(directory: directory)
+        store.destination = .study
+        store.language = arguments.contains("--english") ? .en : .zh
+        store.appearance = arguments.contains("--dark") ? .dark : .light
+        for source in StudySamples.sources {
+            _ = store.add(title: source.title, url: nil, note: source.note, dueAt: nil, kind: .idea)
+        }
+        store.study.selected = Set(store.studySources.map(\.id))
+        if arguments.contains("--review") {
+            var run = StudyRun(goal: "用 45 分钟理解 Agent 的工具、重试与评测，并留下三个小产出。", budget: 45, sources: StudySamples.sources, isDemo: true)
+            run.documents = StudySamples.documents; run.drafts = StudySamples.drafts; run.status = .review
+            run.record("review", "离线样例，引用与时间校验通过。 / Offline fixture validated.")
+            _ = store.study.persist(run)
+        }
+        store.message = nil
+        let succeeded = writeSnapshot(MainView(store: store).frame(width: 1160, height: 850),
+                                      size: NSSize(width: 1160, height: 850), to: arguments[index + 1])
+        try? FileManager.default.removeItem(at: directory)
+        exit(succeeded ? 0 : 2)
+    }
 
     if arguments.contains("--verify-resume-targets") {
         let target = AppResumeTarget.resolve(bundleIdentifier: "md.obsidian", appName: "Obsidian",

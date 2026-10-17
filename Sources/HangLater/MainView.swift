@@ -18,6 +18,8 @@ struct MainView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         heading.padding(.bottom, 30)
                         switch store.destination {
+                        case .study:
+                            ActionStudioView(store: store, studio: store.study)
                         case .line:
                             linePage
                         case .spike:
@@ -190,8 +192,10 @@ struct MainView: View {
                     .font(LeLaboType.copy(13)).lineSpacing(3).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 12)
-            Button { store.presentAddOptions() } label: { Label(store.text("晾一件事", "Hang something"), systemImage: "plus") }.buttonStyle(GreenButton())
-                .keyboardShortcut("n", modifiers: .command)
+            if store.destination != .study {
+                Button { store.presentAddOptions() } label: { Label(store.text("晾一件事", "Hang something"), systemImage: "plus") }.buttonStyle(GreenButton())
+                    .keyboardShortcut("n", modifiers: .command)
+            }
         }
     }
 
@@ -199,6 +203,7 @@ struct MainView: View {
         switch store.destination {
         case .line: return store.text("给想做的事，留一个位置。", "Give what matters a place.")
         case .list: return store.text("一件一件，慢慢来。", "One thing at a time.")
+        case .study: return store.text("从收藏，走向行动。", "Turn saved things into next steps.")
         case .completed: return store.text("那些做完的小事。", "The things you finished.")
         case .spike: return store.text("把完成的纸片，串在这里。", "Keep finished slips on the spike.")
         }
@@ -206,6 +211,8 @@ struct MainView: View {
 
     private var headingSubtitle: String {
         switch store.destination {
+        case .study:
+            return store.text("选几份资料，留一点时间，把下一步变成看得见的纸片。", "Choose a few sources and a little time. Give your next steps a place.")
         case .completed:
             return store.text("每一次收起，都是一点小小的前进。", "Every finished task is a little progress.")
         case .spike:
@@ -219,7 +226,7 @@ struct MainView: View {
 
     private func destinationCount(_ destination: Destination) -> Int {
         switch destination {
-        case .line, .list: return store.pending.count
+        case .line, .list, .study: return store.pending.count
         case .completed: return store.completed.count
         case .spike: return store.spiked.count
         }

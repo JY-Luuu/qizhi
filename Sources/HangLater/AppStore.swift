@@ -6,11 +6,12 @@ import PDFKit
 import UniformTypeIdentifiers
 
 enum Destination: String, CaseIterable {
-    case line, list, completed, spike
+    case line, list, study, completed, spike
     var symbol: String {
         switch self {
         case .line: return "line.3.horizontal"
         case .list: return "checklist"
+        case .study: return "sparkles"
         case .completed: return "checkmark.seal"
         case .spike: return "pin.fill"
         }
@@ -19,6 +20,7 @@ enum Destination: String, CaseIterable {
         switch self {
         case .line: return language.text("晾衣绳", "Clothesline")
         case .list: return language.text("待办清单", "To-do list")
+        case .study: return language.text("行动工坊", "Action studio")
         case .completed: return language.text("已完成", "Completed")
         case .spike: return language.text("完成钉", "Done Spike")
         }
@@ -65,6 +67,7 @@ final class AppStore: ObservableObject {
     var onExternalDropAccepted: (() -> Void)?
     var desktopLinePreferencesChanged: ((Bool, Double) -> Void)?
     let directory: URL
+    let study: StudyCoordinator
     private var repository: TaskRepository?
     private var taskTypeRepository: TaskTypeRepository?
     private var metadataProviders: [UUID: LPMetadataProvider] = [:]
@@ -77,6 +80,7 @@ final class AppStore: ObservableObject {
 
     init(directory: URL) {
         self.directory = directory
+        study = StudyCoordinator(directory: directory)
         pinned = UserDefaults.standard.bool(forKey: "linePinned")
         desktopLineVerticalPosition = DesktopLineLayout.clampedPosition(
             UserDefaults.standard.object(forKey: "desktopLineVerticalPosition") as? Double ?? 0
@@ -127,13 +131,37 @@ final class AppStore: ObservableObject {
         let source: [HangingTask]
         switch destination {
         case .completed, .spike: source = completed
-        case .line, .list: source = pending
+        case .line, .list, .study: source = pending
         }
         guard !search.isEmpty else { return source }
         return source.filter { [$0.title, $0.note, $0.url ?? ""].joined(separator: " ").localizedCaseInsensitiveContains(search) }
     }
 
     func text(_ zh: String, _ en: String) -> String { language.text(zh, en) }
+
+    var studySources: [StudySource] {
+        tasks.filter { task in
+            task.url != nil || (task.filePath.map { ["pdf", "txt", "md", "markdown", "html", "htm"].contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) } ?? false)
+                || (!task.isImage && !task.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }.map { StudySource(id: $0.id, title: $0.title, url: $0.url, filePath: $0.filePath, note: $0.note) }
+    }
+
+    @discardableResult
+    func confirmActionPlan() -> Bool {
+        guard let run = study.current, run.status == .review, study.canUseStorage, let repository else { return false }
+        do {
+            let count = try repository.applyActionPlan(run, cards: run.drafts)
+            reload()
+            var completed = run; completed.status = .completed
+            completed.record("committed", "\(run.drafts.count) 张行动卡已确认。 / Action cards confirmed.")
+            if study.persist(completed) {
+                study.notice = text("已把 \(count) 张行动卡挂上晾衣绳。", "Hung \(count) action cards on the clothesline.")
+            } else {
+                study.notice = text("任务已保存，但确认记录未写入。重新启动后可再次确认，不会重复创建。", "Tasks were saved, but the journal write failed. Reconfirm after restarting; cards will not duplicate.")
+            }
+            return true
+        } catch { study.notice = StudyCoordinator.safeError(error); return false }
+    }
 
     func toggleLanguage() {
         language = language == .zh ? .en : .zh
